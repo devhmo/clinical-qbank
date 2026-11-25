@@ -18,6 +18,9 @@ function questionGuidance(q) {
   if (guidanceCache.has(q)) return guidanceCache.get(q)
   const source = document.createElement('template')
   source.innerHTML = q.explanation || ''
+  for (const signature of source.content.querySelectorAll('.exp-attribution')) {
+    if (signature.textContent.normalize('NFKC').trim().toLowerCase() === 'aseel') signature.remove()
+  }
   const options = new Map()
   const other = []
   const credits = []
