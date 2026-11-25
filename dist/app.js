@@ -19,6 +19,8 @@ const blank = () => ({
   saved: [],
   questions: [],
   attempts: [],
+  notes: [],
+  feedback: [],
   theme: 'light',
   scale: 100,
   layout: 'grid',
@@ -52,6 +54,12 @@ let routeVersion = 0,
   customCount = 20,
   quizKeys = false,
   quizPalette = false
+const quizView = {
+  tip: false,
+  hideStats: false,
+  hideTimer: false,
+  collapsed: new Set(),
+}
 let selectionBusy = false,
   toastTime
 const builderSettings = {
@@ -712,6 +720,7 @@ function dataPage() {
     '<section class="panel"><h2>Study backup</h2><p class="storage-note">Export your sessions, results, bookmarks and preferences. Restore a backup to move them to another browser.</p><div class="data-actions">' +
     button('Export backup', 'export', '', 'download') +
     button('Restore backup', 'restore', '', 'upload') +
+    (db.feedback.length ? button('Export question feedback', 'export-feedback') : '') +
     '<input type="file" accept=".json,application/json" id="backup-file" hidden></div></section><section class="panel"><h2>Question source</h2><p class="storage-note">This site includes the Dr. Reason AMBOSS Combined question collection. Tests are cached on this device when browser storage is available.</p></section><section class="panel"><h2>Illustration credit</h2><p class="storage-note">Human Heart by Ryan Kissinger, NIAID BioArt. Adapted in green for the dashboard.</p></section>'
 }
 let storePromise
@@ -930,19 +939,14 @@ function correctLabels(q) {
     .filter((o) => clean(o.text).trim() === clean(q.correct_answer).trim())
     .map((o) => String(o.label))
 }
-function explanation(q) {
+function explanation(q, guidance) {
   const audio = safeURL(typeof q.audio === 'string' ? q.audio : q.audio?.url),
     video = safeURL(typeof q.video === 'string' ? q.video : q.video?.url)
   return (
-    '<section class="solution"><h3>Explanation</h3><div class="rich">' +
-    (q.explanation
-      ? rich(q.explanation)
-      : '<p>' +
-        esc(
-          q.correct_answer ||
-            'The source does not include an explanation for this question.',
-        ) +
-        '</p>') +
+    '<div class="rich">' +
+    (guidance.general || (!guidance.options.size
+      ? '<p>' + esc(q.correct_answer || 'Explanation unavailable.') + '</p>'
+      : '')) +
     '</div>' +
     media(q.explanation_images, 'Explanation image') +
     (audio
@@ -953,7 +957,7 @@ function explanation(q) {
         esc(video) +
         '">Open video explanation</a>'
       : '') +
-    '</section>'
+    (guidance.credits ? '<footer class="question-source">' + guidance.credits + '</footer>' : '')
   )
 }
 function score(a) {
@@ -1009,8 +1013,7 @@ function makeSession(name, topic, refs, minutes, at = 0) {
     }
   db.attempts.push(a)
   save()
-  quizKeys = false
-  quizPalette = false
+  resetQuestionView()
   go('session/' + a.id)
 }
 function mix(a) {
@@ -1129,116 +1132,78 @@ function question(a, review = false) {
     labels = correctLabels(q),
     flag = a.flags.includes(a.at),
     bookmark = currentQKey(r.t, r.n)
-  const qtop =
-    '<div class="section-top"><div class="eyebrow">' +
-    icon(review ? 'chart' : a.mode === 'exam' ? 'clock' : 'book') +
-    (review
-      ? 'Answer review'
-      : a.mode === 'exam'
-        ? 'Exam mode'
-        : 'Study mode') +
-    '</div>' +
-    (a.deadline && !a.finished
-      ? '<span id="countdown" class="pill">' +
-        esc(timerText(a)) +
-        ' remaining</span>'
-      : '') +
-    '</div>'
-  const options = (q.options || [])
-    .map((o, i) => {
-      const label = String(o.label || String.fromCharCode(65 + i)),
-        chosen = ans?.label === label,
-        correct = show && labels.includes(label)
-      return (
-        '<button class="option ' +
-        (correct
-          ? 'correct'
-          : chosen && show && labels.length
-            ? 'wrong'
-            : chosen
-              ? 'chosen'
-              : '') +
-        '" data-option="' +
-        esc(label) +
-        '" ' +
-        (show ? 'disabled' : '') +
-        ' aria-pressed="' +
-        chosen +
-        '"><strong>' +
-        esc(label) +
-        '</strong><span>' +
-        esc(clean(o.text)) +
-        (correct ? ' <b>(correct)</b>' : '') +
-        (chosen ? ' <small>· Your choice</small>' : '') +
-        '</span></button>'
-      )
-    })
-    .join('')
-  const keyAvailable =
-    /class=["'][^"']*Highlight/i.test(q.raw_text || '') &&
-    (a.mode === 'study' || review)
+  const studyTools = review || a.mode === 'study'
+  const guidance = studyTools ? questionGuidance(q) : null
+  const keyAvailable = studyTools && /class=["'][^"']*Highlight/i.test(q.raw_text || '')
+  const hasTimer = a.deadline && !a.finished
+  const note = db.notes.some((entry) => entry.q === q.id)
+  const tool = (label, action, pressed) =>
+    '<button class="plain" data-act="' + action + '"' +
+    (pressed === undefined ? '' : ' aria-pressed="' + pressed + '"') +
+    '>' + label + '</button>'
+  const options = (q.options || []).map((o) => {
+    const label = String(o.label)
+    const chosen = ans?.label === label
+    if (show) return reviewOption(o, ans, labels, guidance)
+    return '<button class="option' + (chosen ? ' chosen' : '') + '" data-option="' +
+      esc(label) + '" aria-pressed="' + chosen + '"><strong>' + esc(label) +
+      '</strong><span>' + esc(clean(o.text)) + '</span></button>'
+  }).join('')
+  const extra = show ? explanation(q, guidance) : ''
+  const last = a.at === a.refs.length - 1
   content.innerHTML =
-    qtop +
-    '<div class="headrow"><div><h1 class="page-title">' +
-    esc(a.name) +
-    '</h1><p class="sub">' +
-    esc(byID.get(r.t).title) +
-    ' · QID ' +
-    esc(q.id) +
+    '<div class="headrow"><div><h1 class="page-title">' + esc(a.name) +
+    '</h1><p class="sub">' + esc(byID.get(r.t).title) + ' · ' +
+    (review ? 'Answer review' : a.mode === 'exam' ? 'Exam mode' : 'Study mode') +
     '</p></div><button class="btn palette-toggle" data-act="palette" aria-expanded="' +
-    quizPalette +
-    '">' +
-    icon('list') +
-    'Questions</button></div><div class="quiz-grid">' +
+    quizPalette + '">Questions</button></div><div class="quiz-grid">' +
     palette(a) +
     '<article class="quiz-card"><div class="q-meta"><b>Question ' +
-    (a.at + 1) +
-    ' of ' +
-    a.refs.length +
-    '</b><div class="row">' +
-    (keyAvailable
-      ? '<button class="plain ' +
-        (quizKeys ? 'active' : '') +
-        '" data-act="keys" aria-pressed="' +
-        quizKeys +
-        '">' +
-        icon('bulb') +
-        'Key info</button>'
-      : '') +
-    '<button class="plain ' +
-    (flag ? 'active' : '') +
-    '" aria-label="Flag for review" aria-pressed="' +
-    flag +
-    '" title="Flag for review" data-act="flag">' +
-    icon('flag') +
-    '</button><button class="plain ' +
-    (bookmark ? 'active' : '') +
-    '" aria-label="Bookmark question" aria-pressed="' +
-    bookmark +
-    '" title="Bookmark question" data-act="qmark">' +
-    icon('bookmark') +
-    '</button></div></div><div class="stem">' +
-    (q.raw_text
-      ? rich(q.raw_text, quizKeys && keyAvailable)
-      : esc(clean(q.text))) +
-    '</div>' +
-    media(q.question_images, 'Question image') +
-    '<div class="options">' +
-    options +
-    '</div>' +
-    (show ? explanation(q) : '') +
-    '<div class="quiz-actions"><button class="btn" data-jump="' +
-    (a.at - 1) +
-    '" ' +
-    (a.at === 0 ? 'disabled' : '') +
-    '>Previous</button><div class="actions">' +
-    (!review ? button('Finish test', 'finish') : button('Results', 'summary')) +
-    (a.at < a.refs.length - 1
-      ? '<button class="btn primary" data-jump="' +
-        (a.at + 1) +
-        '">Next question</button>'
-      : '') +
+    (a.at + 1) + ' of ' + a.refs.length + '</b><div class="row">' +
+    (hasTimer ? '<span id="countdown" class="pill"' + (quizView.hideTimer ? ' hidden' : '') +
+      '>' + esc(timerText(a)) + ' remaining</span>' +
+      tool(quizView.hideTimer ? 'Show timer' : 'Hide timer', 'toggle-timer') : '') +
+    tool('Text size', 'settings') + '</div></div><div class="stem">' +
+    (q.raw_text ? rich(q.raw_text, quizKeys && keyAvailable) : esc(clean(q.text))) +
+    '</div>' + media(q.question_images, 'Question image') +
+    '<div class="question-tools" role="group" aria-label="Question tools">' +
+    (keyAvailable ? tool('Key info', 'keys', quizKeys) : '') +
+    (guidance?.tip ? tool('Attending tip', 'tip', quizView.tip) : '') +
+    tool('Labs', 'labs') + tool(note ? 'Edit notes' : 'Add notes', 'notes') +
+    tool('Mark', 'flag', flag) + tool('Bookmark', 'qmark', bookmark) +
+    (show && labels.length ? tool('Get Anki card', 'anki') : '') +
+    tool('More actions', 'question-menu') + '</div>' +
+    (guidance?.tip ? '<section class="attending-tip" id="attending-tip"' +
+      (quizView.tip ? '' : ' hidden') + '><h2>Attending tip</h2><div class="rich">' +
+      guidance.tip + '</div><div class="feedback-row"><button class="plain" data-feedback="tip">Give feedback</button></div></section>' : '') +
+    '<div class="options">' + options + '</div>' +
+    (extra ? '<div class="question-extra">' + extra + '</div>' : '') +
+    ((show && guidance.options.size) || (!a.finished && ans) || (show && guidance.rates)
+      ? '<div class="review-tools" role="group" aria-label="Review tools">' +
+        (show && guidance.options.size ? '<button class="plain" id="toggle-explanations" data-act="toggle-explanations">Hide all explanations</button>' : '') +
+        (!a.finished && ans ? tool('Reset question', 'reset-question') : '') +
+        (show && guidance.rates ? tool(quizView.hideStats ? 'Show stats' : 'Hide stats', 'toggle-stats') : '') +
+        '</div>' : '') +
+    '<div class="quiz-actions">' +
+    (!review ? button('Exit session', 'dashboard') : '') +
+    '<div class="actions"><button class="btn" data-jump="' + (a.at - 1) + '" ' +
+    (a.at === 0 ? 'disabled' : '') + '>Previous</button>' +
+    (review ? button('See analysis', 'summary', last ? 'primary' : '')
+      : button(last ? 'See analysis' : 'Finish session', 'finish', last ? 'primary' : '')) +
+    (!last ? '<button class="btn primary" data-jump="' + (a.at + 1) + '">Next question</button>' : '') +
     '</div></div></article></div>'
+  updateExplanationToggle()
+}
+function updateExplanationToggle() {
+  const tool = $('toggle-explanations')
+  if (tool) tool.textContent = content.querySelector('details[data-rationale][open]')
+    ? 'Hide all explanations' : 'Show all explanations'
+}
+function resetQuestionView() {
+  quizKeys = false
+  quizPalette = false
+  quizView.tip = false
+  quizView.collapsed.clear()
 }
 async function showQuestion(a, review, version) {
   if (!a) return go('results')
@@ -1286,8 +1251,7 @@ function jump(n) {
   const a = currentA()
   if (!a || n < 0 || n >= a.refs.length) return
   a.at = n
-  quizKeys = false
-  quizPalette = false
+  resetQuestionView()
   save()
   render()
   window.scrollTo(0, 0)
@@ -1407,17 +1371,17 @@ function searchDialog() {
   $('global').focus()
   searchResults()
 }
-function exportData() {
-  const blob = new Blob(
-      [JSON.stringify({ app: 'clinical-qbank', version: 1, data: db })],
-      { type: 'application/json' },
-    ),
-    url = URL.createObjectURL(blob),
-    link = document.createElement('a')
+function downloadFile(data, name, type) {
+  const url = URL.createObjectURL(new Blob([data], { type }))
+  const link = document.createElement('a')
   link.href = url
-  link.download = 'clinical-qbank-backup.json'
+  link.download = name
   link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+function exportData() {
+  downloadFile(JSON.stringify({ app: 'clinical-qbank', version: 1, data: db }),
+    'clinical-qbank-backup.json', 'application/json')
 }
 function validRef(r) {
   return (
@@ -1486,6 +1450,10 @@ function validBackup(raw) {
       q: byID.get(r.t).ids[r.n],
     })),
     attempts: d.attempts,
+    notes: Array.isArray(d.notes) ? d.notes.filter(validQuestionEntry) : [],
+    feedback: Array.isArray(d.feedback) ? d.feedback.filter((entry) =>
+      validQuestionEntry(entry) && typeof entry.section === 'string' && Number.isFinite(entry.at),
+    ) : [],
     theme: d.theme === 'dark' ? 'dark' : 'light',
     layout: d.layout === 'list' ? 'list' : 'grid',
     scale: Number.isFinite(d.scale)
@@ -1636,6 +1604,67 @@ function action(type) {
         render()
       }
       return
+    case 'tip':
+      quizView.tip = !quizView.tip
+      $('attending-tip').hidden = !quizView.tip
+      content.querySelector('[data-act="tip"]').setAttribute('aria-pressed', quizView.tip)
+      return
+    case 'labs':
+      return showLabs()
+    case 'notes':
+      if (a && qData(a)) questionEditor(qData(a), 'note')
+      return
+    case 'anki':
+      if (a && qData(a) && (a.finished || (a.mode === 'study' && a.answers[a.at])))
+        exportAnki(qData(a))
+      return
+    case 'question-menu':
+      if (a && qData(a))
+        modal('Question actions', '<p class="hint">Question ID · ' +
+          esc(qData(a).id) + '</p><div class="modal-actions">' +
+          button('Copy question ID', 'copy-qid') +
+          '<button class="btn" data-feedback="">Give feedback</button>' +
+          button(a.finished ? 'Back to results' : 'Exit session', a.finished ? 'results' : 'dashboard') + '</div>')
+      return
+    case 'copy-qid':
+      if (a && qData(a) && navigator.clipboard)
+        navigator.clipboard.writeText(qData(a).id)
+          .then(() => notice('Question ID copied'))
+          .catch(() => notice('Select the question ID to copy it.'))
+      else notice('Select the question ID to copy it.')
+      return
+    case 'toggle-explanations': {
+      const show = !content.querySelector('details[data-rationale][open]')
+      content.querySelectorAll('details[data-rationale]').forEach((detail) => {
+        detail.open = show
+      })
+      updateExplanationToggle()
+      return
+    }
+    case 'toggle-stats':
+      quizView.hideStats = !quizView.hideStats
+      content.querySelectorAll('.answer-rate').forEach((rate) => { rate.hidden = quizView.hideStats })
+      content.querySelector('[data-act="toggle-stats"]').textContent =
+        quizView.hideStats ? 'Show stats' : 'Hide stats'
+      return
+    case 'toggle-timer':
+      quizView.hideTimer = !quizView.hideTimer
+      $('countdown').hidden = quizView.hideTimer
+      content.querySelector('[data-act="toggle-timer"]').textContent =
+        quizView.hideTimer ? 'Show timer' : 'Hide timer'
+      return
+    case 'reset-question':
+      expire()
+      if (a && !a.finished && route().startsWith('session/')) {
+        delete a.answers[a.at]
+        resetQuestionView()
+        save()
+        render()
+      }
+      return
+    case 'export-feedback':
+      downloadFile(JSON.stringify(db.feedback, null, 2), 'clinical-qbank-feedback.json', 'application/json')
+      return
     case 'keys':
       quizKeys = !quizKeys
       return render()
@@ -1670,6 +1699,11 @@ document.addEventListener('click', (e) => {
     return
   }
   const d = b.dataset
+  if (d.feedback !== undefined) {
+    const a = currentA()
+    if (a && qData(a)) questionEditor(qData(a), 'feedback', d.feedback)
+    return
+  }
   if (d.topic) {
     const source =
       !dialog.open && route().startsWith('dashboard/') ? '/' + browseSubject : ''
@@ -1772,11 +1806,22 @@ document.addEventListener('change', (e) => {
   if (e.target.id === 'backup-file') readBackup(e.target)
 })
 document.addEventListener('submit', (e) => {
+  if (e.target.id === 'question-editor') {
+    e.preventDefault()
+    return saveQuestionEditor(e.target)
+  }
   if (e.target.id === 'builder') {
     e.preventDefault()
     startSession(true)
   }
 })
+content.addEventListener('toggle', (e) => {
+  const label = e.target.dataset?.rationale
+  if (!label || !content.contains(e.target)) return
+  if (e.target.open) quizView.collapsed.delete(label)
+  else quizView.collapsed.add(label)
+  updateExplanationToggle()
+}, true)
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
     e.preventDefault()
@@ -1837,8 +1882,7 @@ dialog.addEventListener('close', () => {
 })
 window.addEventListener('hashchange', () => {
   if (dialog.open) dialog.close()
-  quizKeys = false
-  quizPalette = false
+  resetQuestionView()
   window.scrollTo(0, 0)
   if (topics.length) render()
 })

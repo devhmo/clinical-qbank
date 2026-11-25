@@ -1008,6 +1008,8 @@ a.back {
 }
 .q-meta .row {
   gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .plain {
   display: inline-flex;
@@ -1021,6 +1023,183 @@ a.back {
 .plain.active {
   color: var(--accent);
   background: var(--accentsoft);
+}
+.question-tools,
+.review-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding-block: 8px;
+  border-block: 1px solid var(--line);
+}
+.question-tools {
+  margin-bottom: 16px;
+}
+.review-tools {
+  margin-top: 18px;
+}
+.question-tools .plain,
+.review-tools .plain,
+.feedback-row .plain {
+  min-height: 36px;
+}
+.plain:hover,
+.plain[aria-pressed='true'] {
+  background: var(--accentsoft);
+  color: var(--accent);
+}
+.attending-tip {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--soft);
+}
+.attending-tip h2 {
+  font-size: 0.9rem;
+  margin-bottom: 5px;
+}
+.answer-review {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  min-width: 0;
+}
+.answer-review.is-correct {
+  border-color: var(--accent);
+  background: var(--accentsoft);
+}
+.answer-review.is-incorrect {
+  border-inline-start: 3px solid #b65c51;
+}
+.answer-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  list-style: none;
+}
+summary.answer-summary {
+  cursor: pointer;
+}
+summary.answer-summary::-webkit-details-marker {
+  display: none;
+}
+.answer-letter {
+  display: grid;
+  place-items: center;
+  flex: 0 0 26px;
+  min-height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-weight: 650;
+  font-size: 0.85rem;
+}
+.is-correct .answer-letter {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.answer-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.answer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+.answer-status,
+.answer-rate,
+.answer-disclosure {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+.answer-status.success {
+  color: var(--accent);
+  font-weight: 650;
+}
+.answer-status.error {
+  color: #9f3a31;
+  font-weight: 650;
+}
+:root[data-theme='dark'] .answer-status.error {
+  color: #ffb5a9;
+}
+.answer-rate,
+.answer-disclosure {
+  flex: none;
+}
+.answer-disclosure::before {
+  content: '+';
+}
+.answer-review[open] .answer-disclosure::before {
+  content: '−';
+}
+.answer-body {
+  padding: 11px 15px 10px 50px;
+  border-top: 1px solid var(--line);
+}
+.learning-point {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-inline-start: 2px solid var(--accent);
+  background: var(--surface);
+}
+.feedback-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.question-extra {
+  margin-top: 14px;
+}
+.question-source {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+#countdown[hidden],
+.answer-rate[hidden] {
+  display: none;
+}
+#question-editor textarea {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--ground);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+.lab-panel {
+  margin-top: 14px;
+}
+.lab-panel dl {
+  margin: 6px 0;
+}
+.lab-panel dl > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding-block: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.lab-panel dd {
+  margin: 0;
+}
+@media (max-width: 650px) {
+  .answer-summary,
+  .answer-body {
+    padding-inline: 12px;
+  }
+  .question-tools .plain,
+  .review-tools .plain {
+    min-height: 42px;
+  }
 }
 .stem {
   font-size: 1.04rem;
@@ -1067,19 +1246,6 @@ a.back {
   border-color: var(--accent);
   background: var(--accentsoft);
 }
-.option.correct {
-  border-color: #62a581;
-  background: #e7f3e9;
-  color: #224d30;
-}
-.option.wrong {
-  border-color: #c88176;
-  background: #fbebe7;
-  color: #762e23;
-}
-.option:disabled {
-  opacity: 1;
-}
 .rich {
   overflow-wrap: anywhere;
   line-height: 1.65;
@@ -1118,14 +1284,6 @@ a.back {
   max-width: min(100%, 440px);
   max-height: 340px;
   object-fit: contain;
-}
-.solution {
-  border-top: 1px solid var(--line);
-  margin-top: 22px;
-  padding-top: 18px;
-}
-.solution h3 {
-  margin-bottom: 10px;
 }
 .rich > div {
   margin-bottom: 14px;
