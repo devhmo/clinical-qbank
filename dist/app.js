@@ -1142,13 +1142,40 @@ function updateDrawerClock(a) {
   $('session-elapsed').textContent = clockLabel((a.finished || Date.now()) - a.start)
   $('question-elapsed').textContent = clockLabel(Date.now() - questionOpenedAt)
 }
+// Keep exploration per session item while the runner is open. Only the first
+// study answer affects the score and reconstructs the initial reveal on reload.
+const studyChoices = new WeakMap()
+function choiceState(a, q) {
+  if (!studyChoices.has(a)) studyChoices.set(a, new Map())
+  const items = studyChoices.get(a)
+  if (!items.has(a.at)) {
+    const selected = a.answers[a.at]?.label
+    const revealed = new Set(selected ? [selected] : [])
+    const expanded = new Set(revealed)
+    if (correctLabels(q).includes(selected))
+      q.options.forEach(o => revealed.add(String(o.label)))
+    items.set(a.at, { revealed, expanded })
+  }
+  return items.get(a.at)
+}
+
+function optionRow(a, label, html) {
+  const struck = a.eliminated?.[a.at]?.includes(label) || false
+  const title = (struck ? 'Restore' : 'Strike out') + ' option ' + label
+  return '<div class="choice-row' + (struck ? ' struck' : '') + '">' + html +
+    '<button class="strike-choice" data-strike="' + esc(label) + '" aria-pressed="' + struck +
+    '" aria-label="' + esc(title) + '" title="' + esc(title) + '"><s>S</s></button></div>'
+}
+
 function question(a, review = false) {
   const q = qData(a),
     ans = a.answers[a.at],
-    show = review || (a.mode === 'study' && !!ans),
     labels = correctLabels(q),
     flag = a.flags.includes(a.at)
   const studyTools = review || a.mode === 'study'
+  const state = !review && studyTools ? choiceState(a, q) : null
+  const show = review || !!state && (labels.some(label => state.revealed.has(label)) ||
+    (!labels.length && q.options.every(o => state.revealed.has(String(o.label)))))
   const guidance = studyTools ? questionGuidance(q) : null
   const keyAvailable = studyTools && /class=["'][^"']*Highlight/i.test(q.raw_text || '')
   const hasTimer = a.deadline && !a.finished
@@ -1167,10 +1194,14 @@ function question(a, review = false) {
   const options = (q.options || []).map((o) => {
     const label = String(o.label)
     const chosen = ans?.label === label
-    if (show) return reviewOption(o, ans, labels, guidance)
-    return '<button class="option' + (chosen ? ' chosen' : '') + '" data-option="' +
-      esc(label) + '" aria-pressed="' + chosen + '"><strong>' + esc(label) +
+    if (review) return reviewOption(o, ans, labels, guidance, !quizView.collapsed.has(label))
+    if (state?.revealed.has(label))
+      return optionRow(a, label, reviewOption(o, ans, labels, guidance, state.expanded.has(label)))
+    const disabled = a.eliminated?.[a.at]?.includes(label)
+    const html = '<button class="option' + (chosen ? ' chosen' : '') + '" data-option="' +
+      esc(label) + '"' + (disabled ? ' disabled' : '') + ' aria-pressed="' + chosen + '"><strong>' + esc(label) +
       '</strong><span>' + esc(clean(o.text)) + '</span></button>'
+    return optionRow(a, label, html)
   }).join('')
   const extra = show ? explanation(q, guidance) : ''
   const last = a.at === a.refs.length - 1
@@ -1199,7 +1230,8 @@ function question(a, review = false) {
     '<div class="options">' + options + '</div>' +
     (extra ? '<div class="question-extra">' + extra + '</div>' : '') + '</article>' +
     '<div class="review-tools" role="group" aria-label="Review tools">' +
-    (show && guidance.options.size ? '<button class="plain" id="toggle-explanations" data-act="toggle-explanations">Hide all explanations</button>' : '') +
+    (state && labels.length && !show ? tool('Show answer', 'show-answer', 'eye') : '') +
+    (show && (review || state) ? '<button class="plain" id="toggle-explanations" data-act="toggle-explanations">Hide all explanations</button>' : '') +
     (!a.finished && ans ? tool('Reset question', 'reset-question', 'history') : '') +
     (show && guidance.rates ? tool(quizView.hideStats ? 'Show stats' : 'Hide stats', 'toggle-stats', 'eye') : '') + '</div>' +
     '<nav class="session-footer" aria-label="Question navigation">' +
@@ -1211,8 +1243,8 @@ function question(a, review = false) {
 }
 function updateExplanationToggle() {
   const tool = $('toggle-explanations')
-  if (tool) tool.textContent = content.querySelector('details[data-rationale][open]')
-    ? 'Hide all explanations' : 'Show all explanations'
+  if (tool) tool.textContent = content.querySelector('details[data-rationale]:not([open])')
+    ? 'Show all explanations' : 'Hide all explanations'
 }
 function resetQuestionView() {
   quizKeys = null
@@ -1241,23 +1273,38 @@ async function showQuestion(a, review, version) {
         '</div>'
   }
 }
-function choose(label) {
+function choose(label, showAnswer = false) {
   const a = currentA()
-  if (!a || a.finished || route().split('/')[0] !== 'session') return
+  if (!a || a.finished || !route().startsWith('session/')) return
   expire()
-  if (a.finished || (a.mode === 'study' && a.answers[a.at])) return
+  if (a.finished) return
   const q = qData(a)
-  if (!q || !q.options.some((o) => String(o.label) === label)) return
-  if (a.mode === 'exam' && a.answers[a.at]?.label === label)
-    delete a.answers[a.at]
-  else {
-    const labels = correctLabels(q)
-    a.answers[a.at] = {
-      label,
-      at: Date.now(),
-      right: labels.length ? labels.includes(label) : null,
+  if (!q || !q.options.some(o => String(o.label) === label)) return
+  if (!showAnswer && a.eliminated?.[a.at]?.includes(label)) return
+  const labels = correctLabels(q)
+  if (a.mode === 'study') {
+    const state = choiceState(a, q)
+    if (state.revealed.has(label)) {
+      if (state.expanded.has(label)) state.expanded.delete(label)
+      else state.expanded.add(label)
+    } else {
+      state.revealed.add(label)
+      state.expanded.add(label)
+      if (labels.includes(label)) q.options.forEach(o => state.revealed.add(String(o.label)))
     }
   }
+  if (a.mode === 'exam' || !a.answers[a.at]) {
+    a.answers[a.at] = { label, at: Date.now(), right: labels.length ? labels.includes(label) : null }
+    save()
+  }
+  question(a)
+}
+function toggleStrike(label) {
+  const a = currentA()
+  if (!a || a.finished || !qData(a)?.options.some(o => String(o.label) === label)) return
+  a.eliminated ??= {}
+  const current = a.eliminated[a.at] || []
+  a.eliminated[a.at] = current.includes(label) ? current.filter(id => id !== label) : [...current, label]
   save()
   question(a)
 }
@@ -1453,6 +1500,12 @@ function validBackup(raw) {
         ![true, false, null].includes(v.right)
       )
         throw Error('Invalid answer record.')
+    }
+    if (a.eliminated !== undefined) {
+      if (!a.eliminated || typeof a.eliminated !== 'object' || Array.isArray(a.eliminated) ||
+        !Object.entries(a.eliminated).every(([i, ids]) => /^\d+$/.test(i) && Number(i) < a.refs.length &&
+          Array.isArray(ids) && ids.every(id => typeof id === 'string')))
+        throw Error('Invalid eliminated choices.')
     }
     if (a.finished) a.score = score(a)
   }
@@ -1658,8 +1711,19 @@ function action(type) {
           .catch(() => notice('Select the question ID to copy it.'))
       else notice('Select the question ID to copy it.')
       return
+    case 'show-answer':
+      if (a?.mode === 'study' && !a.finished) {
+        const correct = correctLabels(qData(a))[0]
+        if (correct) choose(correct, true)
+      }
+      return
     case 'toggle-explanations': {
-      const show = !content.querySelector('details[data-rationale][open]')
+      const show = !!content.querySelector('details[data-rationale]:not([open])')
+      if (a?.mode === 'study' && !a.finished) {
+        const state = choiceState(a, qData(a))
+        state.expanded = show ? new Set(state.revealed) : new Set()
+        return question(a)
+      }
       content.querySelectorAll('details[data-rationale]').forEach((detail) => {
         detail.open = show
       })
@@ -1679,9 +1743,16 @@ function action(type) {
         quizView.hideTimer ? 'Show timer' : 'Hide timer'
       return
     case 'reset-question':
+      if (a && !a.finished)
+        modal('Reset this question?', '<p>Your answer and revealed explanations will be cleared.</p><div class="modal-actions">' +
+          button('Cancel', 'close') + button('Reset question', 'confirm-question-reset', 'primary') + '</div>')
+      return
+    case 'confirm-question-reset':
+      if (dialog.open) dialog.close()
       expire()
       if (a && !a.finished && route().startsWith('session/')) {
         delete a.answers[a.at]
+        studyChoices.get(a)?.delete(a.at)
         resetQuestionView()
         save()
         render()
@@ -1717,6 +1788,18 @@ function action(type) {
   }
 }
 document.addEventListener('click', (e) => {
+  const target = e.target.closest('summary.answer-summary,button[data-option]')
+  if (target) {
+    const selection = window.getSelection()
+    if (selection && !selection.isCollapsed && selection.toString().length) {
+      e.preventDefault()
+      return
+    }
+    if (target.matches('summary') && route().startsWith('session/')) {
+      e.preventDefault()
+      return choose(target.parentElement.dataset.rationale)
+    }
+  }
   const b = e.target.closest('button')
   if (!b || b.disabled) return
   if (b.id === 'menu') {
@@ -1784,6 +1867,7 @@ document.addEventListener('click', (e) => {
   }
   if (d.session) return go('session/' + d.session)
   if (d.result) return go('result/' + d.result)
+  if (d.strike) return toggleStrike(d.strike)
   if (d.option) return choose(d.option)
   if (d.jump !== undefined) return jump(Number(d.jump))
   if (d.act) {
@@ -1843,7 +1927,7 @@ document.addEventListener('submit', (e) => {
 })
 content.addEventListener('toggle', (e) => {
   const label = e.target.dataset?.rationale
-  if (!label || !content.contains(e.target)) return
+  if (!label || !content.contains(e.target) || !route().startsWith('review/')) return
   if (e.target.open) quizView.collapsed.delete(label)
   else quizView.collapsed.add(label)
   updateExplanationToggle()

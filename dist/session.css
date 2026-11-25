@@ -179,3 +179,14 @@ dialog.session-drawer {
 
 .question-sheet .answer-topic { display: inline-flex; align-items: center; gap: 5px; margin: auto auto auto 0; padding: 3px 8px; border: 1px solid var(--quiet); border-radius: 4px; font-size: .8rem; text-decoration: none; }
 .answer-topic .ico { width: .88rem; height: .88rem; }
+
+.choice-row { position: relative; }
+.question-sheet .choice-row .option, .question-sheet .choice-row .answer-summary {
+  padding-inline-end: calc(var(--reader-pad) + 30px);
+}
+.strike-choice {
+  position: absolute; top: 2px; right: max(2px, calc(var(--reader-pad) - 3px));
+  padding: 4px; min-width: 26px; min-height: 27px; color: var(--muted); font-size: .8rem;
+}
+.strike-choice:hover, .strike-choice[aria-pressed="true"] { background: var(--soft); }
+.choice-row.struck .option span, .choice-row.struck .answer-title { text-decoration: line-through; }

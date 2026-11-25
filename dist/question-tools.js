@@ -55,7 +55,7 @@ function questionGuidance(q) {
   return guidance
 }
 
-function reviewOption(option, answer, labels, guidance) {
+function reviewOption(option, answer, labels, guidance, expanded) {
   const label = String(option.label)
   const correct = labels.includes(label)
   const selected = answer?.label === label
@@ -67,7 +67,6 @@ function reviewOption(option, answer, labels, guidance) {
         esc(guidance.learningPoint) +
         '</p></div>'
       : ''
-  const body = rationale || learningPoint
   const header =
     '<span class="answer-letter">' + esc(label) + '</span><span class="answer-title">' +
     esc(clean(option.text)) + '<span class="sr">' +
@@ -79,16 +78,14 @@ function reviewOption(option, answer, labels, guidance) {
         (quizView.hideStats ? ' hidden' : '') + '>' + rate + '%</span>'
       : '')
   const classes = 'answer-review' + (correct ? ' is-correct' : labels.length ? (selected ? ' is-incorrect' : ' distractor') : '') + (selected ? ' selected' : '')
-  if (!body)
-    return '<div class="' + classes + '"><div class="answer-summary">' + header +
-      '</div><p class="answer-body hint">The source has no explanation for this option.</p></div>'
   const topic = correct && byID.get(guidance.topic)
   const topicLink = topic ? '<a class="answer-topic" href="#test/' + esc(topic.id) + '">' +
     icon('book') + esc(topic.title) + '</a>' : ''
   return '<details class="' + classes + '" data-rationale="' + esc(label) + '"' +
-    (quizView.collapsed.has(label) ? '' : ' open') + '><summary class="answer-summary">' +
+    (expanded ? ' open' : '') + '><summary class="answer-summary">' +
     header + '<span class="answer-result" aria-hidden="true">' + (correct ? '✓' : labels.length ? '−' : '') + '</span></summary>' +
-    '<div class="answer-body rich">' + rationale + learningPoint +
+    '<div class="answer-body rich">' + (rationale || learningPoint ? rationale + learningPoint :
+      '<p class="hint">The source has no explanation for this option.</p>') +
     '<div class="feedback-row">' + topicLink + '<button class="plain" data-feedback="' + esc(label) +
     '">' + icon('feedback') + 'Give feedback</button></div></div></details>'
 }
