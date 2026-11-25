@@ -1,8 +1,7 @@
 'use strict'
 const $ = (id) => document.getElementById(id)
 const content = $('content'),
-  dialog = $('dialog'),
-  origin = 'https://aseel-xcoder.github.io/amboss-qbank-aseel/'
+  dialog = $('dialog')
 const esc = (value) =>
   String(value ?? '').replace(
     /[&<>"']/g,
@@ -696,9 +695,7 @@ function dataPage() {
     '<section class="panel"><h2>Study backup</h2><p class="storage-note">Export your sessions, results, bookmarks and preferences. Restore a backup to move them to another browser.</p><div class="data-actions">' +
     button('Export backup', 'export', '', 'download') +
     button('Restore backup', 'restore', '', 'upload') +
-    '<input type="file" accept=".json,application/json" id="backup-file" hidden></div></section><section class="panel"><h2>Question source</h2><p class="storage-note">Tests load from Dr. Reason’s AMBOSS Combined collection when opened. Previously loaded tests are cached on this device when browser storage is available.</p><a class="inline-link" target="_blank" rel="noopener" href="' +
-    origin +
-    '">Open the reference question bank</a></section><section class="panel"><h2>Illustration credit</h2><p class="storage-note">Human Heart by Ryan Kissinger, NIAID BioArt. Adapted in green for the dashboard.</p></section>'
+    '<input type="file" accept=".json,application/json" id="backup-file" hidden></div></section><section class="panel"><h2>Question source</h2><p class="storage-note">This site includes the Dr. Reason AMBOSS Combined question collection. Tests are cached on this device when browser storage is available.</p></section><section class="panel"><h2>Illustration credit</h2><p class="storage-note">Human Heart by Ryan Kissinger, NIAID BioArt. Adapted in green for the dashboard.</p></section>'
 }
 let storePromise
 function dataStore() {
@@ -734,7 +731,7 @@ async function cachedTest(id, payload) {
     }
   })
 }
-const revision = 'catalog-2026-11-25:'
+const revision = 'bundled-2207a2ae:'
 async function loadTest(id) {
   if (!byID.has(id)) throw Error('Unknown test.')
   if (cache.has(id)) return cache.get(id)
@@ -742,27 +739,26 @@ async function loadTest(id) {
   const task = (async () => {
     let data = await cachedTest(revision + id)
     if (!data) {
-      const response = await fetch(
-        new URL('tests/' + encodeURIComponent(id) + '.json', origin),
-        {
-          credentials: 'omit',
-          referrerPolicy: 'no-referrer',
-          signal: AbortSignal.timeout(30000),
-        },
-      )
+      const response = await fetch('tests/' + encodeURIComponent(id) + '.json.gz', {
+        signal: AbortSignal.timeout(30000),
+      })
       if (!response.ok)
-        throw Error(
-          'The question source returned HTTP ' + response.status + '.',
-        )
-      data = await response.json()
+        throw Error('This site could not load the test (HTTP ' + response.status + ').')
+      const json =
+        response.headers.get('content-encoding') === 'gzip'
+          ? response
+          : new Response(
+              response.body.pipeThrough(new DecompressionStream('gzip')),
+            )
+      data = await json.json()
       if (!Array.isArray(data.questions) || !data.questions.length)
-        throw Error('The source returned an empty test.')
+        throw Error('The test file contains no questions.')
       if (
         data.questions.length !== byID.get(id).count ||
         data.questions.some((q, i) => String(q.id) !== byID.get(id).ids[i])
       )
         throw Error(
-          'This test changed at the source. Its question index needs refreshing.',
+          'This test file does not match the question index.',
         )
       await cachedTest(revision + id, data)
     }
@@ -779,7 +775,7 @@ async function loadTest(id) {
 function safeURL(raw) {
   if (typeof raw !== 'string' || !raw.trim()) return ''
   try {
-    const u = new URL(raw, origin)
+    const u = new URL(raw, document.baseURI)
     return u.protocol === 'https:' ? u.href : ''
   } catch {
     return ''
