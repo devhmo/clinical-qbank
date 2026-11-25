@@ -1,0 +1,29 @@
+name: Import the Clinical QBank dataset
+on:
+  push:
+    branches: [prepare-question-bank-import]
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Prepare verified question files
+        run: |
+          set -euo pipefail
+          cp scripts/import-question-bank.py "$RUNNER_TEMP/import.py"
+          git switch --detach eee30090887da3f5ad207b67412a3c39ae7044bc
+          git checkout "$GITHUB_SHA" -- dist/app.js
+          source="$RUNNER_TEMP/AMBOSSQBank.html.gz"
+          curl --fail --location --retry 3 --max-time 180 -o "$source" https://raw.githubusercontent.com/Aseel-xcoder/amboss-qbank-aseel/bd14efd56b4cb2a3fd924fbf7003d1202740b1d2/AMBOSSQBank.html.gz
+          test "$(git hash-object "$source")" = 2207a2ae7a8635e76afbd649fc80b73c7c0d1723
+          python3 "$RUNNER_TEMP/import.py" "$source" dist
+          node --check dist/app.js
+          git add dist/app.js
+          git add -f dist/tests
+          git -c user.name=github-actions -c user.email=41898282+github-actions[bot]@users.noreply.github.com commit -m "Bundle question bank with Clinical QBank"
+          git push origin HEAD:refs/heads/imported-question-bank
