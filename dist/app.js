@@ -217,29 +217,6 @@ function button(text, action, kind = '', symbol = '') {
 function tag(text, symbol) {
   return '<span class="pill">' + icon(symbol) + esc(text) + '</span>'
 }
-function groupedLabel(t) {
-  const name = t.id
-  if (/compartment_syndrome/.test(name)) return ['purple', 'activity']
-  if (/hernia|esophag|gastro|bowel|appendi|intestin/.test(name))
-    return ['orange', 'steth']
-  if (/labor|pregnan|fetal|neonat|child|birth|obstet|in_infants/.test(name))
-    return ['purple', 'baby']
-  if (/uterine|bleed|anemia|hemat|blood|menstr/.test(name))
-    return ['coral', 'drop']
-  if (/aort|cardi|arter|heart|coronary|ventric/.test(name))
-    return ['coral', 'heart']
-  if (/eyelid|eye|retin|cornea|ocular|glaucoma/.test(name))
-    return ['blue', 'eye']
-  if (/abdominal|cavity|urethra|pelvic|kidney|renal/.test(name))
-    return ['blue', 'body']
-  if (/abscess|injury|fracture|emergen/.test(name)) return ['mint', 'cross']
-  return [
-    ['teal', 'steth'],
-    ['blue', 'clipboard'],
-    ['purple', 'activity'],
-    ['orange', 'book'],
-  ][(name.length + name.charCodeAt(0)) % 4]
-}
 const tile = (color, name) =>
   '<span class="tile ' + color + '">' + icon(name) + '</span>'
 function theme() {
@@ -331,7 +308,7 @@ function metrics() {
     total = finished.reduce((n, a) => n + a.refs.length, 0),
     correct = finished.reduce((n, a) => n + a.score.right, 0)
   return [
-    ['Tests', fmt(topics.length), 'teal', 'layers'],
+    ['Topics', fmt(topics.length), 'teal', 'layers'],
     [
       'Questions',
       fmt(topics.reduce((n, t) => n + t.count, 0)),
@@ -358,34 +335,25 @@ function metrics() {
     )
     .join('')
 }
-function testCard(t) {
-  const [c, i] = groupedLabel(t),
-    on = db.saved.includes(t.id)
+function topicCard(t) {
+  const saved = db.saved.includes(t.id)
   return (
     '<article class="test"><button class="test-open" data-topic="' +
     esc(t.id) +
-    '">' +
-    tile(c, i) +
-    '<h3>' +
+    '"><h3>' +
     esc(t.title) +
-    '</h3><span class="test-meta"><span>' +
-    icon('file') +
+    '</h3><span class="test-meta">' +
     fmt(t.count) +
     (t.count === 1 ? ' question' : ' questions') +
-    '</span><span>' +
-    icon('clock') +
-    fmt(t.minutes) +
-    ' min</span></span></button><button class="mark ' +
-    (on ? 'on' : '') +
-    '" aria-label="' +
-    (on ? 'Remove bookmark for ' : 'Bookmark ') +
+    '</span></button><button class="mark" aria-label="' +
+    (saved ? 'Remove bookmark for ' : 'Bookmark ') +
     esc(t.title) +
     '" aria-pressed="' +
-    on +
+    saved +
     '" data-save="' +
     esc(t.id) +
     '">' +
-    icon('bookmark') +
+    (saved ? 'Saved' : 'Save') +
     '</button></article>'
   )
 }
@@ -416,7 +384,7 @@ function dashboard() {
     metrics() +
     '</div>' +
     active().slice(-1).map(sessionRow).join('') +
-    '<section aria-labelledby="subjects-title"><div class="headrow"><h2 id="subjects-title">Browse subjects</h2><a class="btn" href="#dashboard/all">All tests</a></div><div class="subject-grid">' +
+    '<section aria-labelledby="subjects-title"><div class="headrow"><h2 id="subjects-title">Browse subjects</h2><a class="btn" href="#dashboard/all">All topics</a></div><div class="subject-grid">' +
     Array.from(subjects.values(), subjectCard).join('') +
     '</div></section>'
 }
@@ -428,7 +396,7 @@ function subjectCard(subject) {
     esc(subject.title) +
     '</strong><small>' +
     fmt(subject.topics.length) +
-    ' tests · ' +
+    ' topics · ' +
     fmt(subject.questionCount) +
     ' questions</small></a>'
   )
@@ -442,13 +410,13 @@ function browseTests(id) {
     testStatus = 'all'
     page = 1
   }
-  const title = subject?.title || 'All tests'
+  const title = subject?.title || 'All topics'
   setPage(title)
   content.innerHTML =
     '<a class="back" href="#dashboard">' +
     icon('left') +
     'All subjects</a><div class="headrow"><div id="browse-title">' +
-    heading(title, fmt(subject?.topics.length ?? topics.length) + ' topic-based tests') +
+    heading(title, fmt(subject?.topics.length ?? topics.length) + ' topics') +
     '</div><div class="view-toggle"><button class="' +
     (db.layout === 'grid' ? 'sel' : '') +
     '" data-layout="grid" aria-label="Grid view" aria-pressed="' +
@@ -463,11 +431,11 @@ function browseTests(id) {
     icon('list') +
     '</button></div></div><div class="shelf-tools"><label class="searchbox">' +
     icon('search') +
-    '<input id="filter" type="search" placeholder="Search tests..." aria-label="Filter tests" value="' +
+    '<input id="filter" type="search" placeholder="Search topics..." aria-label="Filter topics" value="' +
     esc(filter) +
     '"></label><div class="select-wrap"><select id="status" aria-label="Filter by status">' +
     [
-      ['all', 'All tests'],
+      ['all', 'All topics'],
       ['saved', 'Bookmarked'],
       ['active', 'In progress'],
       ['done', 'Completed'],
@@ -505,7 +473,7 @@ function renderCatalog() {
       '">' +
       found
         .slice((page - 1) * pageSize, page * pageSize)
-        .map(testCard)
+        .map(topicCard)
         .join('') +
       '</div><div class="pagination"><span>' +
       fmt((page - 1) * pageSize + 1) +
@@ -526,7 +494,7 @@ function renderCatalog() {
       '>' +
       icon('right') +
       '</button></div></div>'
-    : empty('No matching tests', 'Try a different search or filter.', 'search')
+    : empty('No matching topics', 'Try a different search or filter.', 'search')
 }
 function modes() {
   return (
@@ -556,7 +524,7 @@ function modes() {
   )
 }
 function info(t, source) {
-  setPage('Test info')
+  setPage('Topic')
   const subject = subjects.get(source)
   const back =
     subject?.topics.includes(t) || source === 'all' ? '/' + source : ''
@@ -565,17 +533,12 @@ function info(t, source) {
     esc(back) +
     '">' +
     icon('left') +
-    esc(back ? subject?.title || 'All tests' : 'All subjects') +
+    esc(back ? subject?.title || 'All topics' : 'All subjects') +
     '</a>' +
-    heading(t.title) +
-    '<div class="setup-card"><div class="eyebrow">Test details</div><div class="summary-pills">' +
-    tag(t.count + ' questions', 'file') +
-    tag(t.count * 4 + ' marks', 'target') +
-    tag(t.minutes + ' min in exam mode', 'clock') +
-    '</div><h2 class="section-head">Choose a mode</h2>' +
+    heading(t.title, fmt(t.count) + (t.count === 1 ? ' question' : ' questions')) +
+    '<div class="setup-card"><h2 class="section-head">Choose a mode</h2>' +
     modes() +
-    '<p class="hint">Each correct answer earns 4 marks. An incorrect answer costs 1 mark. Unanswered questions earn 0.</p>' +
-    button('Start test', 'start', 'primary', 'book') +
+    button('Start practice', 'start', 'primary') +
     '</div><div style="margin-top:16px">' +
     active()
       .filter((a) => a.topic === t.id)
@@ -662,15 +625,15 @@ function marksList() {
   setPage('Bookmarks')
   const saved = topics.filter((t) => db.saved.includes(t.id))
   content.innerHTML =
-    heading('Bookmarks', 'Revisit the tests and questions you saved.') +
-    '<h2 class="section-head">Saved tests · ' +
+    heading('Bookmarks', 'Revisit the topics and questions you saved.') +
+    '<h2 class="section-head">Saved topics · ' +
     saved.length +
     '</h2>' +
     (saved.length
-      ? '<div class="tests">' + saved.map(testCard).join('') + '</div>'
+      ? '<div class="tests">' + saved.map(topicCard).join('') + '</div>'
       : empty(
-          'No saved tests',
-          'Use the bookmark on any test card to save it.',
+          'No saved topics',
+          'Select Save on any topic card.',
           'bookmark',
         )) +
     '<h2 class="section-head" style="margin-top:24px">Saved questions · ' +
@@ -1100,14 +1063,14 @@ async function startSession(customized = false) {
       startButton.disabled = false
       startButton.textContent = customized
         ? 'Start custom practice'
-        : 'Start test'
+        : 'Start practice'
     }
   }
 }
 function sourceError(err) {
   modal(
     'Could not load questions',
-    '<p>The test could not be opened from the reference site. Check your connection and try again.</p><p class="hint">' +
+    '<p>The topic could not be loaded. Check your connection and try again.</p><p class="hint">' +
       esc(err.message) +
       '</p><div class="modal-actions">' +
       button('Close', 'close') +
@@ -1392,7 +1355,7 @@ function searchResults() {
     term = field.value.trim().toLowerCase(),
     output = $('search-results')
   if (!term) {
-    output.innerHTML = '<p class="hint">Enter a test name or a question ID.</p>'
+    output.innerHTML = '<p class="hint">Enter a topic name or a question ID.</p>'
     return
   }
   const results = topics
@@ -1432,14 +1395,14 @@ function searchResults() {
             t.count +
             ' questions</small></span></button>',
         )
-        .join('') || '<p class="hint">No matching tests or question IDs.</p>'
+        .join('') || '<p class="hint">No matching topics or question IDs.</p>'
 }
 function searchDialog() {
   modal(
     'Search question bank',
     '<label class="searchbox">' +
       icon('search') +
-      '<input id="global" type="search" aria-label="Search by test name or question ID" placeholder="Test name or question ID"></label><div class="modal-list" id="search-results"></div>',
+      '<input id="global" type="search" aria-label="Search by topic name or question ID" placeholder="Topic name or question ID"></label><div class="modal-list" id="search-results"></div>',
   )
   $('global').focus()
   searchResults()
