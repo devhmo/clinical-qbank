@@ -37,11 +37,13 @@ function save() {
   }
 }
 let topics = [],
+  subjects = new Map(),
   byID = new Map(),
   qindex = new Map(),
   cache = new Map(),
   pending = new Map()
 let routeVersion = 0,
+  browseSubject = '',
   filter = '',
   testStatus = 'all',
   page = 1,
@@ -53,6 +55,7 @@ let routeVersion = 0,
 let selectionBusy = false,
   toastTime
 const builderSettings = {
+  subject: '',
   history: 'all',
   order: 'random',
   name: '',
@@ -407,15 +410,48 @@ function dashboard() {
   content.innerHTML =
     '<section class="hero"><div class="hero-copy"><div class="eyebrow">' +
     icon('layers') +
-    'AMBOSS Combined</div><h1>Clinical question bank</h1><p>Choose a topic to study or build your own practice test.</p>' +
+    'AMBOSS Combined</div><h1>Clinical question bank</h1><p>Browse by subject or build your own practice test.</p>' +
     button('Custom practice', 'custom', 'lime', 'plus') +
     '</div><div class="hero-art" aria-hidden="true"><img src="assets/heart.webp" alt=""><span class="art-tick"></span></div></section><div class="metrics">' +
     metrics() +
     '</div>' +
     active().slice(-1).map(sessionRow).join('') +
-    '<section aria-labelledby="browse-title"><div class="headrow"><div><h2 id="browse-title">Browse tests</h2><p class="sub">Explore ' +
-    fmt(topics.length) +
-    ' topic-based tests</p></div><div class="view-toggle"><button class="' +
+    '<section aria-labelledby="subjects-title"><div class="headrow"><h2 id="subjects-title">Browse subjects</h2><a class="btn" href="#dashboard/all">All tests</a></div><div class="subject-grid">' +
+    Array.from(subjects.values(), subjectCard).join('') +
+    '</div></section>'
+}
+function subjectCard(subject) {
+  return (
+    '<a class="subject-card" href="#dashboard/' +
+    esc(subject.id) +
+    '">' +
+    tile(subject.color, subject.icon) +
+    '<span><strong>' +
+    esc(subject.title) +
+    '</strong><small>' +
+    fmt(subject.topics.length) +
+    ' tests · ' +
+    fmt(subject.questionCount) +
+    ' questions</small></span></a>'
+  )
+}
+function browseTests(id) {
+  const subject = subjects.get(id)
+  if (id !== 'all' && !subject) return go('dashboard')
+  if (browseSubject !== id) {
+    browseSubject = id
+    filter = ''
+    testStatus = 'all'
+    page = 1
+  }
+  const title = subject?.title || 'All tests'
+  setPage(title)
+  content.innerHTML =
+    '<a class="back" href="#dashboard">' +
+    icon('left') +
+    'All subjects</a><div class="headrow"><div id="browse-title">' +
+    heading(title, fmt(subject?.topics.length ?? topics.length) + ' topic-based tests') +
+    '</div><div class="view-toggle"><button class="' +
     (db.layout === 'grid' ? 'sel' : '') +
     '" data-layout="grid" aria-label="Grid view" aria-pressed="' +
     (db.layout === 'grid') +
@@ -451,11 +487,11 @@ function dashboard() {
       .join('') +
     '</select>' +
     icon('chevron') +
-    '</div></div><div id="catalog"></div></section>'
+    '</div></div><div id="catalog"></div>'
   renderCatalog()
 }
 function renderCatalog() {
-  let found = topics.filter(
+  const found = (subjects.get(browseSubject)?.topics ?? topics).filter(
     (t) =>
       t.title.toLowerCase().includes(filter.trim().toLowerCase()) &&
       (testStatus === 'all' ||
@@ -521,12 +557,18 @@ function modes() {
     '</div>'
   )
 }
-function info(t) {
+function info(t, source) {
   setPage('Test info')
+  const subject = subjects.get(source)
+  const back =
+    subject?.topics.includes(t) || source === 'all' ? '/' + source : ''
   content.innerHTML =
-    '<button class="back" data-act="dashboard">' +
+    '<a class="back" href="#dashboard' +
+    esc(back) +
+    '">' +
     icon('left') +
-    'Browse tests</button>' +
+    esc(back ? subject?.title || 'All tests' : 'All subjects') +
+    '</a>' +
     heading(t.title) +
     '<div class="setup-card"><div class="eyebrow">Test details</div><div class="summary-pills">' +
     tag(t.count + ' questions', 'file') +
@@ -543,9 +585,13 @@ function info(t) {
       .join('') +
     '</div>'
 }
-function picker() {
+function matchingTopics() {
   const term = $('pick-search')?.value.trim().toLowerCase() || ''
-  const hits = topics.filter((t) => t.title.toLowerCase().includes(term))
+  const available = subjects.get(builderSettings.subject)?.topics ?? topics
+  return available.filter((t) => t.title.toLowerCase().includes(term))
+}
+function picker() {
+  const hits = matchingTopics()
   $('picks').innerHTML =
     hits
       .slice(0, 150)
@@ -595,9 +641,19 @@ function custom() {
   setPage('Custom practice')
   content.innerHTML =
     heading('Custom practice', 'Build a session from the topics you choose.') +
-    '<form id="builder" class="setup-card"><div class="fields"><div class="field"><label for="pick-search">Topics</label><label class="searchbox">' +
+    '<form id="builder" class="setup-card"><div class="fields"><div class="field">' +
+    selectControl(
+      'pick-subject',
+      'Subject',
+      [
+        ['', 'All subjects'],
+        ...Array.from(subjects.values(), (s) => [s.id, s.title]),
+      ],
+      builderSettings.subject,
+    ) +
+    '<label for="pick-search">Topics</label><label class="searchbox">' +
     icon('search') +
-    '<input type="search" id="pick-search" placeholder="Find topics to include"></label><div class="picklist" id="picks"></div><div class="tags" id="picked"></div><div class="row"><button type="button" class="btn" data-act="select-all">Select all topics</button><button type="button" class="plain" data-act="clear-topics">Clear selection</button></div></div><div class="field"><label for="num-q">Number of questions</label><input id="num-q" type="number" min="1" required> <span class="hint" id="available"></span></div></div>' +
+    '<input type="search" id="pick-search" placeholder="Find topics to include"></label><div class="picklist" id="picks"></div><div class="tags" id="picked"></div><div class="row"><button type="button" class="btn" data-act="select-all">Select all matching topics</button><button type="button" class="plain" data-act="clear-topics">Clear selection</button></div></div><div class="field"><label for="num-q">Number of questions</label><input id="num-q" type="number" min="1" required> <span class="hint" id="available"></span></div></div>' +
     advancedControls() +
     '<h2 class="section-head" style="margin-top:18px">Session mode</h2>' +
     modes() +
@@ -1522,10 +1578,10 @@ async function openSingle(t, n) {
 function render() {
   const version = ++routeVersion
   closeMenu()
-  const [tab, id] = route().split('/')
+  const [tab, id, source] = route().split('/')
   switch (tab) {
     case 'dashboard':
-      return dashboard()
+      return id ? browseTests(id) : dashboard()
     case 'custom':
       return custom()
     case 'bookmarks':
@@ -1535,7 +1591,7 @@ function render() {
     case 'data':
       return dataPage()
     case 'test':
-      return byID.has(id) ? info(byID.get(id)) : go('dashboard')
+      return byID.has(id) ? info(byID.get(id), source) : go('dashboard')
     case 'session':
     case 'review':
       return showQuestion(currentA(), tab === 'review', version)
@@ -1558,7 +1614,7 @@ function action(type) {
       dialog.close()
       return
     case 'select-all':
-      selectedTopics = new Set(topics.map((t) => t.id))
+      for (const topic of matchingTopics()) selectedTopics.add(topic.id)
       return picker()
     case 'clear-topics':
       selectedTopics.clear()
@@ -1654,9 +1710,11 @@ document.addEventListener('click', (e) => {
   }
   const d = b.dataset
   if (d.topic) {
+    const source =
+      !dialog.open && route().startsWith('dashboard/') ? '/' + browseSubject : ''
     if (dialog.open) dialog.close()
     mode = 'study'
-    go('test/' + d.topic)
+    go('test/' + d.topic + source)
     return
   }
   if (d.openq) {
@@ -1674,7 +1732,7 @@ document.addEventListener('click', (e) => {
       ? db.saved.filter((v) => v !== d.save)
       : [...db.saved, d.save]
     save()
-    if (route() === 'dashboard') renderCatalog()
+    if (route().startsWith('dashboard/')) renderCatalog()
     else marksList()
     return
   }
@@ -1687,7 +1745,7 @@ document.addEventListener('click', (e) => {
   if (d.layout) {
     db.layout = d.layout
     save()
-    dashboard()
+    browseTests(browseSubject)
     return
   }
   if (d.mode) {
@@ -1730,6 +1788,10 @@ document.addEventListener('input', (e) => {
     customCount = Math.max(1, Number(e.target.value) || 1)
 })
 document.addEventListener('change', (e) => {
+  if (e.target.id === 'pick-subject') {
+    builderSettings.subject = e.target.value
+    picker()
+  }
   if (e.target.id === 'history-filter') {
     builderSettings.history = e.target.value
     pickSummary()
@@ -1835,10 +1897,26 @@ async function init() {
     .forEach((el) => (el.innerHTML = icon(el.dataset.icon)))
   theme()
   try {
-    const response = await fetch('catalog.json')
-    if (!response.ok) throw Error()
-    topics = await response.json()
+    const [catalog, groups] = await Promise.all([
+      fetch('catalog.json'),
+      fetch('subjects.json'),
+    ])
+    if (!catalog.ok || !groups.ok) throw Error()
+    topics = await catalog.json()
     byID = new Map(topics.map((t) => [t.id, t]))
+    subjects = new Map(
+      (await groups.json()).map((group) => {
+        const tests = group.topics.map((id) => byID.get(id)).filter(Boolean)
+        return [
+          group.id,
+          {
+            ...group,
+            topics: tests,
+            questionCount: tests.reduce((total, test) => total + test.count, 0),
+          },
+        ]
+      }),
+    )
     for (const t of topics)
       t.ids.forEach((id, n) => {
         const k = id.toLowerCase()
