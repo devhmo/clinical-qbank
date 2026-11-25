@@ -2,7 +2,13 @@
 
 const guidanceCache = new WeakMap()
 const importedQuestionReview = {
+  v80Ao3: {
+    topic: 'achalasia',
+    rates: { A: 72, B: 2, C: 9, D: 0, E: 1, F: 1, G: 15 },
+    learningPoint: 'Diffuse esophageal spasm manifests with dysphagia and retrosternal chest pain that is often relieved by nitrates and is characterized by simultaneous, multi-peak contractions on esophageal manometry.',
+  },
   QZauYQ: {
+    topic: 'induced_abortion',
     rates: { A: 5, B: 63, C: 22, D: 3, E: 6, F: 1 },
     learningPoint: 'Mifepristone is a competitive progesterone receptor antagonist that is used for medical abortion and acts by inducing decidual necrosis, cervical softening, and detachment of the products of conception.',
   },
@@ -49,10 +55,6 @@ function questionGuidance(q) {
   return guidance
 }
 
-function reviewChip(label, tone) {
-  return '<span class="answer-status ' + tone + '">' + esc(label) + '</span>'
-}
-
 function reviewOption(option, answer, labels, guidance) {
   const label = String(option.label)
   const correct = labels.includes(label)
@@ -68,24 +70,27 @@ function reviewOption(option, answer, labels, guidance) {
   const body = rationale || learningPoint
   const header =
     '<span class="answer-letter">' + esc(label) + '</span><span class="answer-title">' +
-    esc(clean(option.text)) + '<span class="answer-badges">' +
-    (correct ? reviewChip('Correct answer', 'success') : '') +
-    (selected ? reviewChip('Your answer', correct ? 'success' : labels.length ? 'error' : '') : '') +
+    esc(clean(option.text)) + '<span class="sr">' +
+    (correct ? ' · Correct answer' : '') +
+    (selected ? ' · Your answer' : '') +
     '</span></span>' +
     (Number.isFinite(rate)
-      ? '<span class="answer-rate" title="Answer rate from the supplied session"' +
+      ? '<span class="answer-rate" title="Answer rate in the reference"' +
         (quizView.hideStats ? ' hidden' : '') + '>' + rate + '%</span>'
       : '')
-  const classes = 'answer-review' + (correct ? ' is-correct' : selected && labels.length ? ' is-incorrect' : '')
+  const classes = 'answer-review' + (correct ? ' is-correct' : labels.length ? (selected ? ' is-incorrect' : ' distractor') : '') + (selected ? ' selected' : '')
   if (!body)
     return '<div class="' + classes + '"><div class="answer-summary">' + header +
       '</div><p class="answer-body hint">The source has no explanation for this option.</p></div>'
+  const topic = correct && byID.get(guidance.topic)
+  const topicLink = topic ? '<a class="answer-topic" href="#test/' + esc(topic.id) + '">' +
+    icon('book') + esc(topic.title) + '</a>' : ''
   return '<details class="' + classes + '" data-rationale="' + esc(label) + '"' +
     (quizView.collapsed.has(label) ? '' : ' open') + '><summary class="answer-summary">' +
-    header + '<span class="answer-disclosure" aria-hidden="true"></span></summary>' +
+    header + '<span class="answer-result" aria-hidden="true">' + (correct ? '✓' : labels.length ? '−' : '') + '</span></summary>' +
     '<div class="answer-body rich">' + rationale + learningPoint +
-    '<div class="feedback-row"><button class="plain" data-feedback="' + esc(label) +
-    '">Give feedback</button></div></div></details>'
+    '<div class="feedback-row">' + topicLink + '<button class="plain" data-feedback="' + esc(label) +
+    '">' + icon('feedback') + 'Give feedback</button></div></div></details>'
 }
 
 const labPanels = [

@@ -1,4 +1,5 @@
 const paths = {
+  feedback: '<path d="M21 11a8.5 8.5 0 0 1-9 8.5 11 11 0 0 1-4-.7L3 20l1.3-4A8.2 8.2 0 0 1 3 11a9 9 0 0 1 18 0z"/>',
   dashboard:
     '<rect x="3" y="3" width="7" height="7" rx="1.3"/><rect x="14" y="3" width="7" height="7" rx="1.3"/><rect x="3" y="14" width="7" height="7" rx="1.3"/><rect x="14" y="14" width="7" height="7" rx="1.3"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5zM3 12l9 5 9-5M3 16l9 5 9-5"/>',

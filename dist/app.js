@@ -52,10 +52,10 @@ let routeVersion = 0,
   mode = 'study',
   selectedTopics = new Set(),
   customCount = 20,
-  quizKeys = false,
-  quizPalette = false
+  quizKeys = null
+let viewedQuestion = '', questionOpenedAt = 0
 const quizView = {
-  tip: false,
+  tip: null,
   hideStats: false,
   hideTimer: false,
   collapsed: new Set(),
@@ -275,6 +275,7 @@ function closeMenu() {
   $('scrim').hidden = true
 }
 function modal(title, body) {
+  dialog.classList.remove('session-drawer')
   $('modal').innerHTML =
     '<div class="modal-head"><h2>' +
     esc(title) +
@@ -1096,51 +1097,73 @@ function toggleQ(t, n) {
   save()
   return !on
 }
-function palette(a) {
-  return (
-    '<aside class="panel palette ' +
-    (quizPalette ? 'open' : '') +
-    '"><h2>Questions</h2><div class="question-palette">' +
-    a.refs
-      .map(
-        (_, i) =>
-          '<button class="jump ' +
-          (a.at === i ? 'current ' : '') +
-          (a.answers[i] ? 'answered ' : '') +
-          (a.flags.includes(i) ? 'flagged' : '') +
-          '" data-jump="' +
-          i +
-          '" aria-label="Question ' +
-          (i + 1) +
-          (a.answers[i] ? ', answered' : '') +
-          (a.flags.includes(i) ? ', flagged' : '') +
-          '" ' +
-          (a.at === i ? 'aria-current="step"' : '') +
-          '>' +
-          (i + 1) +
-          '</button>',
-      )
-      .join('') +
-    '</div></aside>'
-  )
+function clockLabel(ms) {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')
+}
+
+function showSessionMenu(a, mainMenu = false) {
+  if (!a) return
+  const answered = Object.keys(a.answers).length
+  const graded = a.finished || a.mode === 'study'
+  const rows = mainMenu ? '' : a.refs.map((ref, i) => {
+    const answer = a.answers[i]
+    const status = !answer ? 'Unanswered' : graded && answer.right !== null ?
+      (answer.right ? 'Correct' : 'Incorrect') : 'Answered'
+    const preview = clean(cache.get(ref.t)?.questions[ref.n]?.text || byID.get(ref.t).title)
+    return '<button class="drawer-question" data-jump="' + i + '"' +
+      (i === a.at ? ' aria-current="step"' : '') + '>' +
+      '<span class="drawer-status" data-status="' + status + '" aria-label="' + status + '">' +
+      (status === 'Correct' ? '✓' : status === 'Incorrect' ? '×' : answer ? '•' : '·') +
+      '</span><b>' + (i + 1) + '</b><span class="drawer-preview">' + esc(preview) + '</span>' +
+      (a.flags.includes(i) ? '<span aria-label="Marked">' + icon('flag') + '</span>' : '') + '</button>'
+  }).join('')
+  const links = [['dashboard','Dashboard'],['custom','Custom practice'],['results','Results'],
+    ['bookmarks','Bookmarks'],['data','My data']]
+  dialog.classList.add('session-drawer')
+  dialog.setAttribute('aria-label', 'Session navigation')
+  $('modal').innerHTML = '<header class="drawer-tabs"><button data-act="close" class="icon-button" aria-label="Close navigation">' +
+    icon('menu') + '</button><button data-act="session-main" aria-pressed="' + mainMenu + '">Main menu</button>' +
+    '<button data-act="palette" aria-pressed="' + !mainMenu + '">Questions</button></header>' +
+    '<h2>' + esc(a.name) + '</h2><div class="drawer-progress">' + answered + ' / ' + a.refs.length +
+    ' answered<progress value="' + answered + '" max="' + a.refs.length + '"></progress></div>' +
+    '<nav class="drawer-list" aria-label="' + (mainMenu ? 'Main menu' : 'Questions') + '">' +
+    (mainMenu ? links.map(([path,label]) => '<a href="#' + path + '">' + label + '</a>').join('') : rows) +
+    '</nav><footer class="drawer-clock">' + icon('clock') +
+    '<div><b id="session-elapsed"></b><small>Session</small></div>' +
+    '<div><b id="question-elapsed"></b><small>This visit</small></div></footer>'
+  updateDrawerClock(a)
+  if (!dialog.open) dialog.showModal()
+  const current = dialog.querySelector('[aria-current="step"]')
+  if (current) current.scrollIntoView({ block: 'nearest' })
+}
+function updateDrawerClock(a) {
+  if (!$('session-elapsed')) return
+  $('session-elapsed').textContent = clockLabel((a.finished || Date.now()) - a.start)
+  $('question-elapsed').textContent = clockLabel(Date.now() - questionOpenedAt)
 }
 function question(a, review = false) {
-  const r = qRef(a),
-    q = qData(a),
+  const q = qData(a),
     ans = a.answers[a.at],
     show = review || (a.mode === 'study' && !!ans),
     labels = correctLabels(q),
-    flag = a.flags.includes(a.at),
-    bookmark = currentQKey(r.t, r.n)
+    flag = a.flags.includes(a.at)
   const studyTools = review || a.mode === 'study'
   const guidance = studyTools ? questionGuidance(q) : null
   const keyAvailable = studyTools && /class=["'][^"']*Highlight/i.test(q.raw_text || '')
   const hasTimer = a.deadline && !a.finished
   const note = db.notes.some((entry) => entry.q === q.id)
-  const tool = (label, action, pressed) =>
+  const highlight = quizKeys ?? show
+  const tipOpen = quizView.tip ?? show
+  const activeQuestion = a.id + '/' + a.at
+  if (viewedQuestion !== activeQuestion) {
+    viewedQuestion = activeQuestion
+    questionOpenedAt = Date.now()
+  }
+  const tool = (label, action, symbol, pressed) =>
     '<button class="plain" data-act="' + action + '"' +
     (pressed === undefined ? '' : ' aria-pressed="' + pressed + '"') +
-    '>' + label + '</button>'
+    '>' + (symbol ? icon(symbol) : '') + esc(label) + '</button>'
   const options = (q.options || []).map((o) => {
     const label = String(o.label)
     const chosen = ans?.label === label
@@ -1152,46 +1175,38 @@ function question(a, review = false) {
   const extra = show ? explanation(q, guidance) : ''
   const last = a.at === a.refs.length - 1
   content.innerHTML =
-    '<div class="headrow"><div><h1 class="page-title">' + esc(a.name) +
-    '</h1><p class="sub">' + esc(byID.get(r.t).title) + ' · ' +
-    (review ? 'Answer review' : a.mode === 'exam' ? 'Exam mode' : 'Study mode') +
-    '</p></div><button class="btn palette-toggle" data-act="palette" aria-expanded="' +
-    quizPalette + '">Questions</button></div><div class="quiz-grid">' +
-    palette(a) +
-    '<article class="quiz-card"><div class="q-meta"><b>Question ' +
-    (a.at + 1) + ' of ' + a.refs.length + '</b><div class="row">' +
-    (hasTimer ? '<span id="countdown" class="pill"' + (quizView.hideTimer ? ' hidden' : '') +
-      '>' + esc(timerText(a)) + ' remaining</span>' +
+    '<header class="session-header"><div class="session-brandbar">' +
+    '<button id="question-menu-button" data-act="palette" aria-haspopup="dialog" aria-label="Open session navigation">' +
+    icon('menu') + '</button><b>Clinical QBank</b><span>' + (review ? 'Answer review' : a.mode === 'exam' ? 'Exam mode' : 'Study mode') +
+    '</span></div><button class="session-search" data-act="search">' + icon('search') + 'Search question bank</button></header>' +
+    '<article class="question-sheet"><header class="sheet-meta"><h1>' + esc(a.name) + '</h1><span>' +
+    (a.at + 1) + ' / ' + a.refs.length + '</span>' +
+    (hasTimer ? '<span id="countdown"' + (quizView.hideTimer ? ' hidden' : '') + '>' + esc(timerText(a)) + ' remaining</span>' +
       tool(quizView.hideTimer ? 'Show timer' : 'Hide timer', 'toggle-timer') : '') +
-    tool('Text size', 'settings') + '</div></div><div class="stem">' +
-    (q.raw_text ? rich(q.raw_text, quizKeys && keyAvailable) : esc(clean(q.text))) +
+    '<button class="plain text-settings" aria-label="Text size" data-act="settings">ᴀA</button></header>' +
+    '<div class="stem">' + (q.raw_text ? rich(q.raw_text, highlight && keyAvailable) : esc(clean(q.text))) +
     '</div>' + media(q.question_images, 'Question image') +
-    '<div class="question-tools" role="group" aria-label="Question tools">' +
-    (keyAvailable ? tool('Key info', 'keys', quizKeys) : '') +
-    (guidance?.tip ? tool('Attending tip', 'tip', quizView.tip) : '') +
-    tool('Labs', 'labs') + tool(note ? 'Edit notes' : 'Add notes', 'notes') +
-    tool('Mark', 'flag', flag) + tool('Bookmark', 'qmark', bookmark) +
-    (show && labels.length ? tool('Get Anki card', 'anki') : '') +
-    tool('More actions', 'question-menu') + '</div>' +
-    (guidance?.tip ? '<section class="attending-tip" id="attending-tip"' +
-      (quizView.tip ? '' : ' hidden') + '><h2>Attending tip</h2><div class="rich">' +
-      guidance.tip + '</div><div class="feedback-row"><button class="plain" data-feedback="tip">Give feedback</button></div></section>' : '') +
+    '<div class="question-tools" role="group" aria-label="Question tools"><div>' +
+    (keyAvailable ? tool('Key info', 'keys', 'list', highlight) : '') +
+    (guidance?.tip ? tool('Attending tip', 'tip', 'bulb', tipOpen) : '') +
+    tool('Labs', 'labs', 'clipboard') + '</div><div>' +
+    tool(note ? 'Edit notes' : 'Add notes', 'notes', 'file') + tool('Mark', 'flag', 'flag', flag) +
+    (show && labels.length ? tool('Get Anki card', 'anki', 'layers') : '') +
+    '<button class="plain overflow-tools" aria-label="More actions" data-act="question-menu">···</button></div></div>' +
+    (guidance?.tip ? '<section class="attending-tip" id="attending-tip" aria-label="Attending tip"' +
+      (tipOpen ? '' : ' hidden') + '>' + icon('steth') + '<div class="rich">' +
+      guidance.tip + '</div><div class="feedback-row"><button class="plain" data-feedback="tip">' + icon('feedback') + 'Give feedback</button></div></section>' : '') +
     '<div class="options">' + options + '</div>' +
-    (extra ? '<div class="question-extra">' + extra + '</div>' : '') +
-    ((show && guidance.options.size) || (!a.finished && ans) || (show && guidance.rates)
-      ? '<div class="review-tools" role="group" aria-label="Review tools">' +
-        (show && guidance.options.size ? '<button class="plain" id="toggle-explanations" data-act="toggle-explanations">Hide all explanations</button>' : '') +
-        (!a.finished && ans ? tool('Reset question', 'reset-question') : '') +
-        (show && guidance.rates ? tool(quizView.hideStats ? 'Show stats' : 'Hide stats', 'toggle-stats') : '') +
-        '</div>' : '') +
-    '<div class="quiz-actions">' +
-    (!review ? button('Exit session', 'dashboard') : '') +
-    '<div class="actions"><button class="btn" data-jump="' + (a.at - 1) + '" ' +
-    (a.at === 0 ? 'disabled' : '') + '>Previous</button>' +
-    (review ? button('See analysis', 'summary', last ? 'primary' : '')
-      : button(last ? 'See analysis' : 'Finish session', 'finish', last ? 'primary' : '')) +
-    (!last ? '<button class="btn primary" data-jump="' + (a.at + 1) + '">Next question</button>' : '') +
-    '</div></div></article></div>'
+    (extra ? '<div class="question-extra">' + extra + '</div>' : '') + '</article>' +
+    '<div class="review-tools" role="group" aria-label="Review tools">' +
+    (show && guidance.options.size ? '<button class="plain" id="toggle-explanations" data-act="toggle-explanations">Hide all explanations</button>' : '') +
+    (!a.finished && ans ? tool('Reset question', 'reset-question', 'history') : '') +
+    (show && guidance.rates ? tool(quizView.hideStats ? 'Show stats' : 'Hide stats', 'toggle-stats', 'eye') : '') + '</div>' +
+    '<nav class="session-footer" aria-label="Question navigation">' +
+    button(review ? 'Exit review' : 'Exit session', review ? 'summary' : 'dashboard') +
+    '<button data-jump="' + (a.at - 1) + '"' + (a.at === 0 ? ' disabled' : '') + '>' + icon('left') + 'Previous</button>' +
+    (last ? button('See analysis', review ? 'summary' : 'finish', 'advance')
+      : '<button class="advance" data-jump="' + (a.at + 1) + '">Next ' + icon('right') + '</button>') + '</nav>'
   updateExplanationToggle()
 }
 function updateExplanationToggle() {
@@ -1200,9 +1215,8 @@ function updateExplanationToggle() {
     ? 'Hide all explanations' : 'Show all explanations'
 }
 function resetQuestionView() {
-  quizKeys = false
-  quizPalette = false
-  quizView.tip = false
+  quizKeys = null
+  quizView.tip = null
   quizView.collapsed.clear()
 }
 async function showQuestion(a, review, version) {
@@ -1250,6 +1264,7 @@ function choose(label) {
 function jump(n) {
   const a = currentA()
   if (!a || n < 0 || n >= a.refs.length) return
+  if (dialog.open) dialog.close()
   a.at = n
   resetQuestionView()
   save()
@@ -1508,7 +1523,14 @@ function render() {
   const version = ++routeVersion
   closeMenu()
   const [tab, id, source] = route().split('/')
+  const inSession = tab === 'session' || tab === 'review'
+  document.body.classList.toggle('reading-session', inSession)
+  if (!inSession) viewedQuestion = ''
   switch (tab) {
+    case 'question': {
+      const ref = qindex.get(id?.toLowerCase())?.[0]
+      return ref ? openSingle(ref.t, ref.n) : go('dashboard')
+    }
     case 'dashboard':
       return id ? browseTests(id) : dashboard()
     case 'custom':
@@ -1599,13 +1621,14 @@ function action(type) {
       return
     case 'qmark':
       if (a) {
+        if (dialog.open) dialog.close()
         const r = qRef(a)
         notice(toggleQ(r.t, r.n) ? 'Question bookmarked' : 'Bookmark removed')
         render()
       }
       return
     case 'tip':
-      quizView.tip = !quizView.tip
+      quizView.tip = $('attending-tip').hidden
       $('attending-tip').hidden = !quizView.tip
       content.querySelector('[data-act="tip"]').setAttribute('aria-pressed', quizView.tip)
       return
@@ -1622,6 +1645,8 @@ function action(type) {
       if (a && qData(a))
         modal('Question actions', '<p class="hint">Question ID · ' +
           esc(qData(a).id) + '</p><div class="modal-actions">' +
+          button(currentQKey(qRef(a).t, qRef(a).n) ? 'Remove bookmark' : 'Bookmark', 'qmark') +
+          (!a.finished ? button('Finish session', 'finish') : '') +
           button('Copy question ID', 'copy-qid') +
           '<button class="btn" data-feedback="">Give feedback</button>' +
           button(a.finished ? 'Back to results' : 'Exit session', a.finished ? 'results' : 'dashboard') + '</div>')
@@ -1666,11 +1691,12 @@ function action(type) {
       downloadFile(JSON.stringify(db.feedback, null, 2), 'clinical-qbank-feedback.json', 'application/json')
       return
     case 'keys':
-      quizKeys = !quizKeys
+      quizKeys = content.querySelector('[data-act="keys"]')?.getAttribute('aria-pressed') !== 'true'
       return render()
     case 'palette':
-      quizPalette = !quizPalette
-      return render()
+      return showSessionMenu(a)
+    case 'session-main':
+      return showSessionMenu(a, true)
     case 'retry':
       return render()
     case 'export':
@@ -1889,6 +1915,7 @@ window.addEventListener('hashchange', () => {
 function tick() {
   expire()
   const a = currentA()
+  if (dialog.open && a && dialog.classList.contains('session-drawer')) updateDrawerClock(a)
   if (a?.deadline && !a.finished && $('countdown'))
     $('countdown').textContent = timerText(a) + ' remaining'
 }
