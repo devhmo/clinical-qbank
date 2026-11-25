@@ -2,8 +2,6 @@
   {
     "id": "pediatrics",
     "title": "Pediatrics",
-    "color": "purple",
-    "icon": "baby",
     "topics": [
       "acyanotic_congenital_heart_defects",
       "adolescent_health_care",
@@ -111,8 +109,6 @@
   {
     "id": "ophthalmology",
     "title": "Ophthalmology",
-    "color": "blue",
-    "icon": "eye",
     "topics": [
       "abnormalities_of_eyelid_position",
       "age_related_macular_degeneration",
@@ -152,8 +148,6 @@
   {
     "id": "dermatology",
     "title": "Dermatology",
-    "color": "orange",
-    "icon": "drop",
     "topics": [
       "acanthosis_nigricans",
       "acne_vulgaris",
@@ -220,8 +214,6 @@
   {
     "id": "gynecology",
     "title": "Gynecology",
-    "color": "coral",
-    "icon": "steth",
     "topics": [
       "abnormal_uterine_bleeding",
       "adenomyosis",
@@ -291,8 +283,6 @@
   {
     "id": "obstetrics",
     "title": "Obstetrics",
-    "color": "teal",
-    "icon": "baby",
     "topics": [
       "abnormal_labor_and_delivery",
       "antepartum_hemorrhage",
@@ -336,8 +326,6 @@
   {
     "id": "cardiology",
     "title": "Cardiology",
-    "color": "coral",
-    "icon": "heart",
     "topics": [
       "acute_coronary_syndrome",
       "acute_heart_failure",
@@ -412,8 +400,6 @@
   {
     "id": "respiratory",
     "title": "Respiratory Medicine",
-    "color": "blue",
-    "icon": "activity",
     "topics": [
       "acute_asthma_exacerbation",
       "acute_bronchitis",
@@ -471,8 +457,6 @@
   {
     "id": "gastroenterology",
     "title": "Gastroenterology & Hepatology",
-    "color": "orange",
-    "icon": "steth",
     "topics": [
       "achalasia",
       "acute_cholangitis",
@@ -602,8 +586,6 @@
   {
     "id": "endocrinology",
     "title": "Endocrinology & Metabolism",
-    "color": "purple",
-    "icon": "activity",
     "topics": [
       "acromegaly",
       "adrenal_gland",
@@ -669,8 +651,6 @@
   {
     "id": "nephrology",
     "title": "Nephrology",
-    "color": "blue",
-    "icon": "drop",
     "topics": [
       "acid_base_disorders",
       "acute_kidney_injury",
@@ -724,8 +704,6 @@
   {
     "id": "urology",
     "title": "Urology",
-    "color": "teal",
-    "icon": "steth",
     "topics": [
       "abnormalities_of_the_male_urethra_and_webbed_penis",
       "benign_prostatic_hyperplasia",
@@ -768,8 +746,6 @@
   {
     "id": "neurology",
     "title": "Neurology & Neurosurgery",
-    "color": "purple",
-    "icon": "activity",
     "topics": [
       "acoustic_neuroma",
       "altered_mental_status_and_coma",
@@ -883,8 +859,6 @@
   {
     "id": "ent",
     "title": "Otolaryngology (ENT)",
-    "color": "blue",
-    "icon": "steth",
     "topics": [
       "acute_otitis_media",
       "acute_tonsillitis_and_pharyngitis",
@@ -947,8 +921,6 @@
   {
     "id": "orthopedics",
     "title": "Orthopedics & Sports Medicine",
-    "color": "orange",
-    "icon": "activity",
     "topics": [
       "achilles_tendon_rupture",
       "acromioclavicular_joint_injury",
@@ -1058,8 +1030,6 @@
   {
     "id": "surgery",
     "title": "General & Vascular Surgery",
-    "color": "mint",
-    "icon": "cross",
     "topics": [
       "abdominal_aortic_aneurysm",
       "abdominal_cavity",
@@ -1157,8 +1127,6 @@
   {
     "id": "rheumatology",
     "title": "Rheumatology",
-    "color": "teal",
-    "icon": "activity",
     "topics": [
       "acute_rheumatic_fever",
       "adult_onset_still_disease",
@@ -1206,8 +1174,6 @@
   {
     "id": "hematology-oncology",
     "title": "Hematology & Oncology",
-    "color": "coral",
-    "icon": "drop",
     "topics": [
       "acute_chest_syndrome",
       "acute_leukemia",
@@ -1317,8 +1283,6 @@
   {
     "id": "infectious-diseases",
     "title": "Infectious Diseases & Microbiology",
-    "color": "mint",
-    "icon": "cross",
     "topics": [
       "actinomycosis",
       "african_trypanosomiasis",
@@ -1461,8 +1425,6 @@
   {
     "id": "psychiatry",
     "title": "Psychiatry & Behavioral Health",
-    "color": "purple",
-    "icon": "activity",
     "topics": [
       "acute_and_posttraumatic_stress_disorders",
       "alcohol_use_disorder",
@@ -1521,8 +1483,6 @@
   {
     "id": "emergency",
     "title": "Emergency Medicine & Critical Care",
-    "color": "coral",
-    "icon": "cross",
     "topics": [
       "abdominal_compartment_syndrome",
       "acetaminophen_overdose",
@@ -1615,8 +1575,6 @@
   {
     "id": "anesthesiology",
     "title": "Anesthesiology & Pain Medicine",
-    "color": "teal",
-    "icon": "activity",
     "topics": [
       "acute_pain_management",
       "airway_management",
@@ -1641,8 +1599,6 @@
   {
     "id": "immunology",
     "title": "Allergy & Immunology",
-    "color": "mint",
-    "icon": "steth",
     "topics": [
       "adaptive_immune_system",
       "allergic_rhinitis",
@@ -1667,8 +1623,6 @@
   {
     "id": "preventive",
     "title": "Family & Preventive Medicine",
-    "color": "teal",
-    "icon": "clipboard",
     "topics": [
       "adolescent_health_care",
       "adult_health_maintenance",
@@ -1726,8 +1680,6 @@
   {
     "id": "basic-sciences",
     "title": "Basic Sciences & Pharmacology",
-    "color": "purple",
-    "icon": "book",
     "topics": [
       "abdominal_cavity",
       "adipose_tissue",

@@ -424,15 +424,13 @@ function subjectCard(subject) {
   return (
     '<a class="subject-card" href="#dashboard/' +
     esc(subject.id) +
-    '">' +
-    tile(subject.color, subject.icon) +
-    '<span><strong>' +
+    '"><strong>' +
     esc(subject.title) +
     '</strong><small>' +
     fmt(subject.topics.length) +
     ' tests · ' +
     fmt(subject.questionCount) +
-    ' questions</small></span></a>'
+    ' questions</small></a>'
   )
 }
 function browseTests(id) {
